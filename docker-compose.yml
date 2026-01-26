@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  zenc-server:
+    build: .
+    image: aminofox/zenc-server:latest
+    container_name: zenc-server
+    ports:
+      - "8080:8080"      # HTTP API
+      - "9090:9090"      # Metrics
+      - "10000-20000:10000-20000/udp"  # WebRTC media ports
+    environment:
+      - TZ=UTC
+    volumes:
+      - ./config.yaml:/root/config.yaml:ro
+    depends_on:
+      - redis
+    networks:
+      - zenc-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: zenc-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - zenc-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Optional: Redis Commander for debugging
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: zenc-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - zenc-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+    profiles:
+      - debug
+
+volumes:
+  redis-data:
+
+networks:
+  zenc-network:
+    driver: bridge

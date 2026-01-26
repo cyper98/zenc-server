@@ -1,0 +1,38 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  name: zenc-server-1
+  tls:
+    enabled: false
+    cert_file: /certs/server.crt
+    key_file: /certs/server.key
+
+webrtc:
+  ice_servers:
+    - urls: 
+        - stun:stun.l.google.com:19302
+        - stun:stun1.l.google.com:19302
+  port_range:
+    min: 10000
+    max: 20000
+  
+redis:
+  mode: single # single, sentinel, cluster
+  addresses:
+    - localhost:6379
+  password: ""
+  db: 0
+
+zones:
+  - id: default
+    region: local
+    primary: true
+
+logging:
+  level: info # debug, info, warn, error
+  format: json # json, console
+
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics

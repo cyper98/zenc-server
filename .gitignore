@@ -1,0 +1,43 @@
+# Binaries
+zenc-server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (don't commit sensitive configs)
+config.local.yaml
+*.pem
+*.key
+*.crt
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
