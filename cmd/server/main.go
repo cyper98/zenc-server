@@ -54,6 +54,16 @@ func main() {
 	// Initialize Room Manager
 	roomManager := room.NewManager(redisStore, lgr)
 
+	// Configure WebSocket origin checking
+	originChecker := websocket.MakeOriginChecker(cfg.WebSocket.AllowedOrigins)
+	websocket.SetOriginChecker(originChecker)
+
+	if len(cfg.WebSocket.AllowedOrigins) == 0 {
+		lgr.Warn("WebSocket: allowing all origins (not recommended for production)")
+	} else {
+		lgr.Info("WebSocket: origin checking enabled", "allowed_origins", cfg.WebSocket.AllowedOrigins)
+	}
+
 	// Setup HTTP server
 	if cfg.Logging.Level == "debug" {
 		gin.SetMode(gin.DebugMode)

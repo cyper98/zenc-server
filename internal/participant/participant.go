@@ -18,5 +18,8 @@ func New(roomID, userID string, role protocol.RoomRole) *protocol.Participant {
 		Tracks:       make([]protocol.Track, 0),
 		ConnectionID: "",
 		JoinedAt:     time.Now(),
+		State:        protocol.StateActive,
+		HoldRooms:    make([]string, 0),
+		MaxHoldSlots: 3,
 	}
 }

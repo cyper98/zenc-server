@@ -9,12 +9,14 @@ import (
 
 // Config represents the complete server configuration
 type Config struct {
-	Server  ServerConfig  `yaml:"server"`
-	WebRTC  WebRTCConfig  `yaml:"webrtc"`
-	Redis   RedisConfig   `yaml:"redis"`
-	Zones   []ZoneConfig  `yaml:"zones"`
-	Logging LoggingConfig `yaml:"logging"`
-	Metrics MetricsConfig `yaml:"metrics"`
+	Server    ServerConfig    `yaml:"server"`
+	WebRTC    WebRTCConfig    `yaml:"webrtc"`
+	Redis     RedisConfig     `yaml:"redis"`
+	Limits    LimitsConfig    `yaml:"limits"`
+	WebSocket WebSocketConfig `yaml:"websocket"`
+	Zones     []ZoneConfig    `yaml:"zones"`
+	Logging   LoggingConfig   `yaml:"logging"`
+	Metrics   MetricsConfig   `yaml:"metrics"`
 }
 
 // ServerConfig represents HTTP server configuration
@@ -57,6 +59,23 @@ type RedisConfig struct {
 	Addresses []string `yaml:"addresses"`
 	Password  string   `yaml:"password"`
 	DB        int      `yaml:"db"`
+}
+
+// LimitsConfig represents track and participant limits
+type LimitsConfig struct {
+	MaxCameraTracksPerUser int `yaml:"max_camera_tracks_per_user"`
+	MaxScreenTracksPerUser int `yaml:"max_screen_tracks_per_user"`
+	MaxScreenTracksPerRoom int `yaml:"max_screen_tracks_per_room"`
+	MaxAudioTracksPerUser  int `yaml:"max_audio_tracks_per_user"`
+	MaxConcurrentHolds     int `yaml:"max_concurrent_holds"`
+	HoldTimeoutSeconds     int `yaml:"hold_timeout_seconds"`
+}
+
+// WebSocketConfig represents WebSocket security configuration
+type WebSocketConfig struct {
+	AllowedOrigins       []string `yaml:"allowed_origins"`
+	ReconnectTimeout     int      `yaml:"reconnect_timeout"` // Seconds before auto-hold
+	MaxReconnectAttempts int      `yaml:"max_reconnect_attempts"`
 }
 
 // ZoneConfig represents a stream zone configuration
@@ -102,6 +121,26 @@ func Load(path string) (*Config, error) {
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		// Set defaults for limits if not specified
+		if c.Limits.MaxCameraTracksPerUser == 0 {
+			c.Limits.MaxCameraTracksPerUser = 1
+		}
+		if c.Limits.MaxScreenTracksPerUser == 0 {
+			c.Limits.MaxScreenTracksPerUser = 1
+		}
+		if c.Limits.MaxScreenTracksPerRoom == 0 {
+			c.Limits.MaxScreenTracksPerRoom = 5
+		}
+		if c.Limits.MaxAudioTracksPerUser == 0 {
+			c.Limits.MaxAudioTracksPerUser = 2
+		}
+		if c.Limits.MaxConcurrentHolds == 0 {
+			c.Limits.MaxConcurrentHolds = 3
+		}
+		if c.Limits.HoldTimeoutSeconds == 0 {
+			c.Limits.HoldTimeoutSeconds = 3600
+		}
+
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
 
@@ -115,6 +154,14 @@ func (c *Config) Validate() error {
 
 	if len(c.Zones) == 0 {
 		return fmt.Errorf("at least one zone is required")
+	}
+
+	// WebSocket defaults
+	if c.WebSocket.ReconnectTimeout == 0 {
+		c.WebSocket.ReconnectTimeout = 30 // 30 seconds
+	}
+	if c.WebSocket.MaxReconnectAttempts == 0 {
+		c.WebSocket.MaxReconnectAttempts = 3
 	}
 
 	return nil

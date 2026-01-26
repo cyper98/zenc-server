@@ -2,6 +2,7 @@ package room
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -150,8 +151,19 @@ func (m *Manager) ListRooms() ([]*protocol.Room, error) {
 // AddParticipant adds a participant to a room
 func (m *Manager) AddParticipant(roomID string, participant *protocol.Participant) error {
 	// Verify room exists
-	if _, err := m.GetRoom(roomID); err != nil {
+	room, err := m.GetRoom(roomID)
+	if err != nil {
 		return fmt.Errorf("room not found: %w", err)
+	}
+
+	// Check room capacity
+	currentCount, err := m.GetParticipantCount(roomID)
+	if err != nil {
+		return fmt.Errorf("failed to get participant count: %w", err)
+	}
+
+	if currentCount >= room.MaxUsers {
+		return errors.New("room is full")
 	}
 
 	// Store participant
@@ -229,4 +241,122 @@ func (m *Manager) GetParticipants(roomID string) ([]*protocol.Participant, error
 	}
 
 	return participants, nil
+}
+
+// GetParticipantCount returns the number of participants in a room
+func (m *Manager) GetParticipantCount(roomID string) (int, error) {
+	participants, err := m.GetParticipants(roomID)
+	if err != nil {
+		return 0, err
+	}
+	return len(participants), nil
+}
+
+// RoomTrackStats contains statistics about tracks in a room
+type RoomTrackStats struct {
+	ActiveScreenShares int
+	MaxScreenShares    int
+}
+
+// CanPublishScreenShare checks if a screen share can be published in a room
+func (m *Manager) CanPublishScreenShare(roomID string) error {
+	stats, err := m.GetRoomTrackStats(roomID)
+	if err != nil {
+		return err
+	}
+
+	if stats.ActiveScreenShares >= stats.MaxScreenShares {
+		return errors.New("maximum screen shares reached for this room")
+	}
+
+	return nil
+}
+
+// GetRoomTrackStats returns track statistics for a room
+func (m *Manager) GetRoomTrackStats(roomID string) (*RoomTrackStats, error) {
+	participants, err := m.GetParticipants(roomID)
+	if err != nil {
+		return nil, err
+	}
+
+	screenShares := 0
+	for _, p := range participants {
+		for _, track := range p.Tracks {
+			if track.Source == protocol.TrackSourceScreen &&
+				track.Status == protocol.TrackStatusActive {
+				screenShares++
+			}
+		}
+	}
+
+	room, _ := m.GetRoom(roomID)
+	maxScreenShares := 5 // Default
+
+	// Check metadata for custom limit
+	if room.Metadata != nil {
+		if val, ok := room.Metadata["max_screen_shares"]; ok {
+			if max, ok := val.(float64); ok {
+				maxScreenShares = int(max)
+			}
+		}
+	}
+
+	return &RoomTrackStats{
+		ActiveScreenShares: screenShares,
+		MaxScreenShares:    maxScreenShares,
+	}, nil
+}
+
+// SetParticipantState updates the state of a participant
+func (m *Manager) SetParticipantState(roomID, participantID string, state protocol.ParticipantState) error {
+	participantKey := fmt.Sprintf("participant:%s", participantID)
+
+	// Get current participant data
+	participantData, err := m.store.Get(participantKey)
+	if err != nil {
+		return fmt.Errorf("participant not found: %w", err)
+	}
+
+	var participant protocol.Participant
+	if err := json.Unmarshal([]byte(participantData), &participant); err != nil {
+		return fmt.Errorf("failed to unmarshal participant: %w", err)
+	}
+
+	// Update state
+	participant.State = state
+
+	// Save back to Redis
+	updatedData, err := json.Marshal(participant)
+	if err != nil {
+		return fmt.Errorf("failed to marshal participant: %w", err)
+	}
+
+	if err := m.store.Set(participantKey, string(updatedData), 0); err != nil {
+		return fmt.Errorf("failed to save participant state: %w", err)
+	}
+
+	m.logger.Infow("Participant state updated",
+		"participant_id", participantID,
+		"room_id", roomID,
+		"state", state,
+	)
+
+	return nil
+}
+
+// GetParticipantState gets the current state of a participant
+func (m *Manager) GetParticipantState(roomID, participantID string) (protocol.ParticipantState, error) {
+	participantKey := fmt.Sprintf("participant:%s", participantID)
+
+	participantData, err := m.store.Get(participantKey)
+	if err != nil {
+		return "", fmt.Errorf("participant not found: %w", err)
+	}
+
+	var participant protocol.Participant
+	if err := json.Unmarshal([]byte(participantData), &participant); err != nil {
+		return "", fmt.Errorf("failed to unmarshal participant: %w", err)
+	}
+
+	return participant.State, nil
 }

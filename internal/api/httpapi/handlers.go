@@ -31,8 +31,17 @@ func RegisterRoutes(router *gin.RouterGroup, roomManager *room.Manager, logger *
 		rooms.GET("/:id", h.GetRoom)
 		rooms.DELETE("/:id", h.DeleteRoom)
 		rooms.POST("/:id/join", h.JoinRoom)
+		rooms.POST("/:id/rejoin", h.RejoinRoom)
 		rooms.POST("/:id/leave", h.LeaveRoom)
 		rooms.GET("/:id/participants", h.GetParticipants)
+		rooms.POST("/:id/hold", h.HoldRoom)
+		rooms.POST("/:id/resume", h.ResumeRoom)
+	}
+
+	// Participant routes
+	participants := router.Group("/participants")
+	{
+		participants.GET("/:id/held", h.GetHeldRooms)
 	}
 
 	// Track management routes
@@ -176,6 +185,71 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 	})
 }
 
+// RejoinRoom handles POST /api/v1/rooms/:id/rejoin (reconnection)
+func (h *Handler) RejoinRoom(c *gin.Context) {
+	roomID := c.Param("id")
+
+	var req struct {
+		ParticipantID string `json:"participant_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, protocol.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Check participant state
+	state, err := h.roomManager.GetParticipantState(roomID, req.ParticipantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, protocol.ErrorResponse{
+			Error:   "not_found",
+			Message: "Participant not found or session expired",
+			Code:    http.StatusNotFound,
+		})
+		return
+	}
+
+	// Allow rejoin if in-transit or on-hold
+	if state != protocol.StateInTransit && state != protocol.StateOnHold {
+		c.JSON(http.StatusBadRequest, protocol.ErrorResponse{
+			Error:   "invalid_state",
+			Message: "Participant is already active in room",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Restore to active state
+	if err := h.roomManager.SetParticipantState(roomID, req.ParticipantID, protocol.StateActive); err != nil {
+		h.logger.Errorw("Failed to restore participant state", "error", err)
+		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to rejoin room",
+			Code:    http.StatusInternalServerError,
+		})
+		return
+	}
+
+	room, _ := h.roomManager.GetRoom(roomID)
+
+	h.logger.Infow("Participant rejoined",
+		"participant_id", req.ParticipantID,
+		"room_id", roomID,
+		"previous_state", state,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "Rejoined successfully",
+		"participant_id": req.ParticipantID,
+		"room":           room,
+		"previous_state": state,
+	})
+}
+
 // LeaveRoom handles POST /api/v1/rooms/:id/leave
 func (h *Handler) LeaveRoom(c *gin.Context) {
 	roomID := c.Param("id")
@@ -239,6 +313,25 @@ func (h *Handler) PublishTrack(c *gin.Context) {
 			Code:    http.StatusBadRequest,
 		})
 		return
+	}
+
+	// Check if participant exists and get their current room
+	participants, err := h.roomManager.GetParticipants("")
+	if err == nil {
+		for _, p := range participants {
+			if p.ID == req.ParticipantID {
+				// Check if participant is on hold
+				if p.State == protocol.StateOnHold {
+					c.JSON(http.StatusForbidden, protocol.ErrorResponse{
+						Error:   "participant_on_hold",
+						Message: "Cannot publish tracks while participant is on hold",
+						Code:    http.StatusForbidden,
+					})
+					return
+				}
+				break
+			}
+		}
 	}
 
 	// TODO: Implement WebRTC negotiation with Pion
@@ -331,5 +424,110 @@ func (h *Handler) ResumeTrack(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Track resumed successfully",
 		"status":  protocol.TrackStatusActive,
+	})
+}
+
+// HoldRoom handles POST /api/v1/rooms/:id/hold
+func (h *Handler) HoldRoom(c *gin.Context) {
+	roomID := c.Param("id")
+
+	var req struct {
+		ParticipantID string `json:"participant_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, protocol.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Update participant state to on hold
+	if err := h.roomManager.SetParticipantState(roomID, req.ParticipantID, protocol.StateOnHold); err != nil {
+		h.logger.Errorw("Failed to set participant state", "error", err)
+		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to put room on hold",
+			Code:    http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// TODO: Use HoldManager to store track state
+	// holdManager.HoldRoom(req.ParticipantID, roomID, tracks)
+
+	h.logger.Infow("Room put on hold",
+		"room_id", roomID,
+		"participant_id", req.ParticipantID,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "Room put on hold successfully",
+		"room_id":        roomID,
+		"participant_id": req.ParticipantID,
+		"state":          protocol.StateOnHold,
+	})
+}
+
+// ResumeRoom handles POST /api/v1/rooms/:id/resume
+func (h *Handler) ResumeRoom(c *gin.Context) {
+	roomID := c.Param("id")
+
+	var req struct {
+		ParticipantID string `json:"participant_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, protocol.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Update participant state back to active
+	if err := h.roomManager.SetParticipantState(roomID, req.ParticipantID, protocol.StateActive); err != nil {
+		h.logger.Errorw("Failed to set participant state", "error", err)
+		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to resume room",
+			Code:    http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// TODO: Use HoldManager to restore track state
+	// holdState, err := holdManager.ResumeRoom(req.ParticipantID, roomID)
+
+	h.logger.Infow("Room resumed from hold",
+		"room_id", roomID,
+		"participant_id", req.ParticipantID,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "Room resumed successfully",
+		"room_id":        roomID,
+		"participant_id": req.ParticipantID,
+		"state":          protocol.StateActive,
+	})
+}
+
+// GetHeldRooms handles GET /api/v1/participants/:id/held
+func (h *Handler) GetHeldRooms(c *gin.Context) {
+	participantID := c.Param("id")
+
+	// TODO: Implement with HoldManager
+	// heldRooms := holdManager.GetHeldRooms(participantID)
+
+	h.logger.Infow("Getting held rooms",
+		"participant_id", participantID,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"participant_id": participantID,
+		"held_rooms":     []string{}, // Placeholder
 	})
 }

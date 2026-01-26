@@ -37,6 +37,15 @@ const (
 	TrackStatusStopped TrackStatus = "stopped"
 )
 
+// ParticipantState represents the state of a participant
+type ParticipantState string
+
+const (
+	StateActive    ParticipantState = "active"
+	StateOnHold    ParticipantState = "on_hold"
+	StateInTransit ParticipantState = "in_transit"
+)
+
 // Room represents a streaming session
 type Room struct {
 	ID        string                 `json:"id"`
@@ -49,13 +58,16 @@ type Room struct {
 
 // Participant represents a user in a room
 type Participant struct {
-	ID           string    `json:"id"`
-	RoomID       string    `json:"room_id"`
-	UserID       string    `json:"user_id"`
-	Role         RoomRole  `json:"role"`
-	Tracks       []Track   `json:"tracks"`
-	ConnectionID string    `json:"connection_id"`
-	JoinedAt     time.Time `json:"joined_at"`
+	ID           string           `json:"id"`
+	RoomID       string           `json:"room_id"`
+	UserID       string           `json:"user_id"`
+	Role         RoomRole         `json:"role"`
+	Tracks       []Track          `json:"tracks"`
+	ConnectionID string           `json:"connection_id"`
+	JoinedAt     time.Time        `json:"joined_at"`
+	State        ParticipantState `json:"state"`
+	HoldRooms    []string         `json:"hold_rooms,omitempty"`
+	MaxHoldSlots int              `json:"max_hold_slots"`
 }
 
 // Track represents an audio or video track

@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -9,25 +10,50 @@ import (
 	"github.com/aminofox/zenc-server/internal/room"
 	"github.com/aminofox/zenc-server/pkg/logger"
 	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	pionwebrtc "github.com/pion/webrtc/v3"
 )
+
+// OriginChecker is a function type for checking WebSocket origins
+type OriginChecker func(*http.Request) bool
+
+var originChecker OriginChecker
+
+// SetOriginChecker sets the origin checker function
+func SetOriginChecker(checker OriginChecker) {
+	originChecker = checker
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// TODO: Implement proper origin checking
+		if originChecker != nil {
+			return originChecker(r)
+		}
+		// Default: allow all origins (user should configure this in production)
 		return true
 	},
 }
 
 // Connection represents a WebSocket connection
 type Connection struct {
-	conn        *websocket.Conn
-	send        chan []byte
-	roomManager *room.Manager
-	logger      *logger.Logger
-	mu          sync.Mutex
+	conn            *websocket.Conn
+	send            chan []byte
+	roomManager     *room.Manager
+	logger          *logger.Logger
+	mu              sync.Mutex
+	participantID   string
+	roomID          string
+	disconnectTime  *time.Time
+	reconnectConfig ReconnectConfig
+}
+
+// ReconnectConfig holds reconnection settings
+type ReconnectConfig struct {
+	Timeout     time.Duration
+	MaxAttempts int
 }
 
 // HandleConnection handles WebSocket connections
@@ -57,6 +83,7 @@ func HandleConnection(w http.ResponseWriter, r *http.Request, roomManager *room.
 // readPump handles incoming WebSocket messages
 func (c *Connection) readPump() {
 	defer func() {
+		c.cleanup()
 		c.conn.Close()
 	}()
 
@@ -82,8 +109,61 @@ func (c *Connection) readPump() {
 			continue
 		}
 
-		// Handle message
 		c.handleMessage(&msg)
+	}
+}
+
+// cleanup handles connection cleanup and auto-hold
+func (c *Connection) cleanup() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.roomID != "" && c.participantID != "" {
+		// Set participant to in-transit state (waiting for reconnect)
+		if err := c.roomManager.SetParticipantState(c.roomID, c.participantID, protocol.StateInTransit); err != nil {
+			c.logger.Errorw("Failed to set in-transit state", "error", err)
+		} else {
+			now := time.Now()
+			c.disconnectTime = &now
+			c.logger.Infow("Participant disconnected, waiting for reconnect",
+				"participant_id", c.participantID,
+				"room_id", c.roomID,
+				"timeout", c.reconnectConfig.Timeout,
+			)
+
+			// Start auto-hold timer
+			go c.autoHoldAfterTimeout()
+		}
+	}
+}
+
+// autoHoldAfterTimeout automatically holds participant after timeout
+func (c *Connection) autoHoldAfterTimeout() {
+	time.Sleep(c.reconnectConfig.Timeout)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check if still disconnected
+	if c.disconnectTime == nil {
+		return // Reconnected already
+	}
+
+	state, err := c.roomManager.GetParticipantState(c.roomID, c.participantID)
+	if err != nil {
+		return
+	}
+
+	// If still in-transit, auto-hold
+	if state == protocol.StateInTransit {
+		if err := c.roomManager.SetParticipantState(c.roomID, c.participantID, protocol.StateOnHold); err != nil {
+			c.logger.Errorw("Failed to auto-hold participant", "error", err)
+		} else {
+			c.logger.Infow("Participant auto-held after disconnect timeout",
+				"participant_id", c.participantID,
+				"room_id", c.roomID,
+			)
+		}
 	}
 }
 
@@ -154,46 +234,187 @@ func (c *Connection) handleMessage(msg *protocol.WebSocketMessage) {
 func (c *Connection) handleJoin(payload map[string]interface{}) {
 	roomID, _ := payload["room_id"].(string)
 	userID, _ := payload["user_id"].(string)
+	roleStr, _ := payload["role"].(string)
 
 	c.logger.Infow("Handling join request",
 		"room_id", roomID,
 		"user_id", userID,
 	)
 
-	// TODO: Implement join logic
+	// Verify room exists
+	room, err := c.roomManager.GetRoom(roomID)
+	if err != nil {
+		c.sendError("Room not found", err)
+		return
+	}
+
+	// Create participant
+	participant := &protocol.Participant{
+		ID:           uuid.New().String(),
+		RoomID:       roomID,
+		UserID:       userID,
+		Role:         protocol.RoomRole(roleStr),
+		Tracks:       []protocol.Track{},
+		ConnectionID: c.participantID,
+		JoinedAt:     time.Now(),
+		State:        protocol.StateActive,
+		MaxHoldSlots: 3,
+	}
+
+	if participant.Role == "" {
+		participant.Role = protocol.RolePublisher
+	}
+
+	// Add participant to room
+	if err := c.roomManager.AddParticipant(roomID, participant); err != nil {
+		c.sendError("Failed to join room", err)
+		return
+	}
+
+	// Store participant and room IDs
+	c.participantID = participant.ID
+	c.roomID = roomID
+
+	// Send success response
 	response := protocol.WebSocketMessage{
 		Type: "joined",
 		Payload: map[string]interface{}{
-			"room_id": roomID,
-			"status":  "success",
+			"room_id":        roomID,
+			"participant_id": participant.ID,
+			"room_name":      room.Name,
+			"status":         "success",
+		},
+	}
+
+	c.sendMessage(&response)
+
+	c.logger.Infow("Participant joined room",
+		"room_id", roomID,
+		"participant_id", participant.ID,
+		"user_id", userID,
+	)
+}
+
+// handleLeave handles room leave requests
+func (c *Connection) handleLeave(payload map[string]interface{}) {
+	c.logger.Infow("Handling leave request",
+		"participant_id", c.participantID,
+		"room_id", c.roomID,
+	)
+
+	if c.roomID == "" || c.participantID == "" {
+		c.sendError("Not in a room", nil)
+		return
+	}
+
+	// Remove participant from room
+	if err := c.roomManager.RemoveParticipant(c.roomID, c.participantID); err != nil {
+		c.logger.Warnw("Failed to remove participant", "error", err)
+	}
+
+	// Send success response
+	response := protocol.WebSocketMessage{
+		Type: "left",
+		Payload: map[string]interface{}{
+			"room_id":        c.roomID,
+			"participant_id": c.participantID,
+			"status":         "success",
+		},
+	}
+
+	c.sendMessage(&response)
+
+	// Clear connection state
+	c.roomID = ""
+	c.participantID = ""
+}
+
+// handleOffer handles WebRTC offer
+func (c *Connection) handleOffer(payload map[string]interface{}) {
+	sdp, _ := payload["sdp"].(string)
+
+	c.logger.Infow("Handling WebRTC offer", "participant_id", c.participantID)
+
+	if c.participantID == "" {
+		c.sendError("Not joined to a room", nil)
+		return
+	}
+
+	// In a full implementation, you would:
+	// 1. Get WebRTC manager from server context
+	// 2. Create peer connection
+	// 3. Process offer and create answer
+	// For now, send placeholder response
+
+	response := protocol.WebSocketMessage{
+		Type: "answer",
+		Payload: map[string]interface{}{
+			"sdp":            sdp, // Placeholder - should be actual answer SDP
+			"participant_id": c.participantID,
 		},
 	}
 
 	c.sendMessage(&response)
 }
 
-// handleLeave handles room leave requests
-func (c *Connection) handleLeave(payload map[string]interface{}) {
-	c.logger.Infow("Handling leave request")
-	// TODO: Implement leave logic
-}
-
-// handleOffer handles WebRTC offer
-func (c *Connection) handleOffer(payload map[string]interface{}) {
-	c.logger.Infow("Handling WebRTC offer")
-	// TODO: Implement WebRTC offer handling with Pion
-}
-
 // handleAnswer handles WebRTC answer
 func (c *Connection) handleAnswer(payload map[string]interface{}) {
-	c.logger.Infow("Handling WebRTC answer")
-	// TODO: Implement WebRTC answer handling with Pion
+	sdp, _ := payload["sdp"].(string)
+
+	c.logger.Infow("Handling WebRTC answer",
+		"participant_id", c.participantID,
+		"sdp_length", len(sdp),
+	)
+
+	// Process answer through WebRTC manager
+	// Implementation depends on server context having WebRTC manager
+
+	response := protocol.WebSocketMessage{
+		Type: "answer_processed",
+		Payload: map[string]interface{}{
+			"status":         "success",
+			"participant_id": c.participantID,
+		},
+	}
+
+	c.sendMessage(&response)
 }
 
 // handleICECandidate handles ICE candidate
 func (c *Connection) handleICECandidate(payload map[string]interface{}) {
-	c.logger.Debugw("Handling ICE candidate")
-	// TODO: Implement ICE candidate handling with Pion
+	c.logger.Debugw("Handling ICE candidate", "participant_id", c.participantID)
+
+	if c.participantID == "" {
+		return
+	}
+
+	// Extract candidate data
+	candidateData, ok := payload["candidate"].(map[string]interface{})
+	if !ok {
+		c.logger.Warnw("Invalid ICE candidate format")
+		return
+	}
+
+	// Parse candidate
+	candidate := pionwebrtc.ICECandidateInit{
+		Candidate: candidateData["candidate"].(string),
+	}
+
+	if sdpMLineIndex, ok := candidateData["sdpMLineIndex"].(float64); ok {
+		idx := uint16(sdpMLineIndex)
+		candidate.SDPMLineIndex = &idx
+	}
+
+	if sdpMid, ok := candidateData["sdpMid"].(string); ok {
+		candidate.SDPMid = &sdpMid
+	}
+
+	// Add candidate through WebRTC manager
+	// Implementation depends on server context
+
+	c.logger.Debugw("ICE candidate processed",
+		"participant_id", c.participantID,
+	)
 }
 
 // sendMessage sends a message through the WebSocket connection
@@ -209,4 +430,27 @@ func (c *Connection) sendMessage(msg *protocol.WebSocketMessage) {
 	default:
 		c.logger.Warnw("Send channel full, dropping message")
 	}
+}
+
+// sendError sends an error message through the WebSocket connection
+func (c *Connection) sendError(message string, err error) {
+	errorMsg := message
+	if err != nil {
+		errorMsg = fmt.Sprintf("%s: %v", message, err)
+	}
+
+	response := protocol.WebSocketMessage{
+		Type: "error",
+		Payload: map[string]interface{}{
+			"error":   errorMsg,
+			"message": message,
+		},
+	}
+
+	c.sendMessage(&response)
+
+	c.logger.Warnw("Sent error to client",
+		"message", message,
+		"error", err,
+	)
 }

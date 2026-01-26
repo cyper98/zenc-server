@@ -23,6 +23,29 @@ redis:
   password: ""
   db: 0
 
+# Track and participant limits
+limits:
+  max_camera_tracks_per_user: 1
+  max_screen_tracks_per_user: 1
+  max_screen_tracks_per_room: 5
+  max_audio_tracks_per_user: 2
+  max_concurrent_holds: 3
+  hold_timeout_seconds: 3600
+
+# WebSocket security (configure based on your application)
+websocket:
+  # Leave empty to allow all origins (development)
+  # Add your domains in production, supports wildcards
+  allowed_origins: []
+    # Examples:
+    # - "https://yourdomain.com"
+    # - "https://*.yourdomain.com"
+    # - "http://localhost:*"
+  
+  # Reconnection settings
+  reconnect_timeout: 30        # Seconds before auto-hold on disconnect
+  max_reconnect_attempts: 3    # Max reconnection attempts
+
 zones:
   - id: default
     region: local
