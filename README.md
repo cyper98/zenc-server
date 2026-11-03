@@ -1,6 +1,6 @@
 # Zenc Server
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://golang.org)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/cyper98/zenc-server)
 
@@ -421,7 +421,7 @@ Contributions are welcome! Please follow these steps:
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## 👤 Author
 
