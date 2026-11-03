@@ -18,7 +18,7 @@ This method requires only Docker and Docker Compose installed.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/aminofox/zenc-server.git
+git clone https://github.com/cyper98/zenc-server.git
 cd zenc-server
 
 # 2. Start everything (server + Redis)
@@ -42,7 +42,7 @@ That's it! The server is now running at `http://localhost:8080`.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/aminofox/zenc-server.git
+git clone https://github.com/cyper98/zenc-server.git
 cd zenc-server
 
 # 2. Install dependencies
@@ -69,7 +69,7 @@ make run
 docker run -d -p 6379:6379 --name zenc-redis redis:7-alpine
 
 # 2. Clone and run
-git clone https://github.com/aminofox/zenc-server.git
+git clone https://github.com/cyper98/zenc-server.git
 cd zenc-server
 go run ./cmd/server
 ```
@@ -300,16 +300,16 @@ kill -9 <PID>
 1. ✅ Server is running
 2. 📖 Read the [full README](README.md) for detailed API documentation
 3. 🔧 Check the [Architecture Documentation](ARCHITECTURE.md) (coming soon)
-4. 💻 Try the [zenc-sdk](https://github.com/aminofox/zenc-sdk) for client integration
+4. 💻 Try the [zenc-sdk](https://github.com/cyper98/zenc-sdk) for client integration
 5. 🎯 Build your first livestreaming app!
 
 ---
 
 ## Getting Help
 
-- 🐛 **Found a bug?** [Open an issue](https://github.com/aminofox/zenc-server/issues)
-- 💬 **Have a question?** [Start a discussion](https://github.com/aminofox/zenc-server/discussions)
-- 📧 **Need support?** Contact aminofox
+- 🐛 **Found a bug?** [Open an issue](https://github.com/cyper98/zenc-server/issues)
+- 💬 **Have a question?** [Start a discussion](https://github.com/cyper98/zenc-server/discussions)
+- 📧 **Need support?** Contact cyper98
 
 ---
 

@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://golang.org)
-[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/aminofox/zenc-server)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/cyper98/zenc-server)
 
 **Zenc Server** is the core media server for the Zenc livestreaming ecosystem. Built in Go for high performance and concurrency, it handles real-time media routing using WebRTC SFU (Selective Forwarding Unit) architecture.
 
@@ -30,7 +30,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/aminofox/zenc-server.git
+git clone https://github.com/cyper98/zenc-server.git
 cd zenc-server
 
 # Start the server with Redis
@@ -340,7 +340,7 @@ make docker-build
 
 ```bash
 # Build the image
-docker build -t aminofox/zenc-server:latest .
+docker build -t cyper98/zenc-server:latest .
 
 # Run the container
 docker run -d \
@@ -349,7 +349,7 @@ docker run -d \
   -p 9090:9090 \
   -p 10000-20000:10000-20000/udp \
   -v $(pwd)/config.yaml:/root/config.yaml:ro \
-  aminofox/zenc-server:latest
+  cyper98/zenc-server:latest
 ```
 
 ### Environment Variables
@@ -425,16 +425,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👤 Author
 
-**aminofox**
+**cyper98**
 
-- GitHub: [@aminofox](https://github.com/aminofox)
-- Repository: [zenc-server](https://github.com/aminofox/zenc-server)
+- GitHub: [@cyper98](https://github.com/cyper98)
+- Repository: [zenc-server](https://github.com/cyper98/zenc-server)
 
 ## 🔗 Related Projects
 
-- [zenc-sdk](https://github.com/aminofox/zenc-sdk) - Client SDK
-- [zenc-protocol](https://github.com/aminofox/zenc-protocol) - Protocol definitions
-- [zenc-admin](https://github.com/aminofox/zenc-admin) - Admin dashboard
+- [zenc-sdk](https://github.com/cyper98/zenc-sdk) - Client SDK
+- [zenc-protocol](https://github.com/cyper98/zenc-protocol) - Protocol definitions
+- [zenc-admin](https://github.com/cyper98/zenc-admin) - Admin dashboard
 
 ## ⭐ Support
 
@@ -446,6 +446,6 @@ For questions or support, please open an issue on GitHub.
 
 ---
 
-**Built with ❤️ by aminofox**
+**Built with ❤️ by cyper98**
 
-Part of the [Zenc Livestreaming Ecosystem](https://github.com/aminofox)
+Part of the [Zenc Livestreaming Ecosystem](https://github.com/cyper98)

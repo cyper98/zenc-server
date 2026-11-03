@@ -29,7 +29,7 @@ clean: ## Clean build artifacts
 	rm -f coverage.out coverage.html
 
 docker-build: ## Build Docker image
-	docker build -t aminofox/zenc-server:latest .
+	docker build -t cyper98/zenc-server:latest .
 
 docker-run: ## Run with Docker Compose
 	docker-compose up -d

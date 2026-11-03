@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/aminofox/zenc-server/pkg/logger"
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 )
 
 // TrackLimits defines limits for different track types

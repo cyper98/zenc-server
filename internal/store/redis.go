@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aminofox/zenc-server/pkg/config"
+	"github.com/cyper98/zenc-server/pkg/config"
 	"github.com/redis/go-redis/v9"
 )
 

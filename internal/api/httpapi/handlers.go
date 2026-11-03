@@ -3,10 +3,10 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/aminofox/zenc-server/internal/participant"
-	"github.com/aminofox/zenc-server/internal/room"
-	"github.com/aminofox/zenc-server/pkg/logger"
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/internal/participant"
+	"github.com/cyper98/zenc-server/internal/room"
+	"github.com/cyper98/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
 

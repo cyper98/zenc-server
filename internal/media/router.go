@@ -3,7 +3,7 @@ package media
 import (
 	"github.com/google/uuid"
 
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 )
 
 // Router handles media packet routing (SFU core)

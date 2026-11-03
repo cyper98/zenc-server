@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aminofox/zenc-server/internal/api/httpapi"
-	"github.com/aminofox/zenc-server/internal/api/websocket"
-	"github.com/aminofox/zenc-server/internal/room"
-	"github.com/aminofox/zenc-server/internal/store"
-	"github.com/aminofox/zenc-server/pkg/config"
-	"github.com/aminofox/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/internal/api/httpapi"
+	"github.com/cyper98/zenc-server/internal/api/websocket"
+	"github.com/cyper98/zenc-server/internal/room"
+	"github.com/cyper98/zenc-server/internal/store"
+	"github.com/cyper98/zenc-server/pkg/config"
+	"github.com/cyper98/zenc-server/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 )
 
 // New creates a new participant

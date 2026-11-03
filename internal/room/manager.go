@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aminofox/zenc-server/internal/store"
-	"github.com/aminofox/zenc-server/pkg/logger"
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/internal/store"
+	"github.com/cyper98/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 	"github.com/google/uuid"
 )
 

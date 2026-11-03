@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aminofox/zenc-server/internal/room"
-	"github.com/aminofox/zenc-server/pkg/logger"
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/internal/room"
+	"github.com/cyper98/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	pionwebrtc "github.com/pion/webrtc/v3"

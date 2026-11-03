@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aminofox/zenc-server/pkg/logger"
-	"github.com/aminofox/zenc-server/pkg/protocol"
+	"github.com/cyper98/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/pkg/protocol"
 )
 
 // HoldState represents the state of a held room

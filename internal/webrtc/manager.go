@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aminofox/zenc-server/pkg/logger"
+	"github.com/cyper98/zenc-server/pkg/logger"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )

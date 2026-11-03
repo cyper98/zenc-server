@@ -3,7 +3,7 @@ version: '3.8'
 services:
   zenc-server:
     build: .
-    image: aminofox/zenc-server:latest
+    image: cyper98/zenc-server:latest
     container_name: zenc-server
     ports:
       - "8080:8080"      # HTTP API
