@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cyper98/zenc-server/internal/room"
+	"github.com/cyper98/zenc-server/internal/webrtc"
 	"github.com/cyper98/zenc-server/pkg/logger"
 	"github.com/cyper98/zenc-server/pkg/protocol"
 	"github.com/google/uuid"
@@ -42,6 +43,7 @@ type Connection struct {
 	conn            *websocket.Conn
 	send            chan []byte
 	roomManager     *room.Manager
+	webrtcManager   *webrtc.Manager
 	logger          *logger.Logger
 	mu              sync.Mutex
 	participantID   string
@@ -57,7 +59,7 @@ type ReconnectConfig struct {
 }
 
 // HandleConnection handles WebSocket connections
-func HandleConnection(w http.ResponseWriter, r *http.Request, roomManager *room.Manager, logger *logger.Logger) {
+func HandleConnection(w http.ResponseWriter, r *http.Request, roomManager *room.Manager, webrtcManager *webrtc.Manager, logger *logger.Logger) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Errorw("Failed to upgrade WebSocket connection", "error", err)
@@ -65,10 +67,11 @@ func HandleConnection(w http.ResponseWriter, r *http.Request, roomManager *room.
 	}
 
 	c := &Connection{
-		conn:        conn,
-		send:        make(chan []byte, 256),
-		roomManager: roomManager,
-		logger:      logger,
+		conn:          conn,
+		send:          make(chan []byte, 256),
+		roomManager:   roomManager,
+		webrtcManager: webrtcManager,
+		logger:        logger,
 	}
 
 	// Start goroutines for reading and writing
@@ -307,6 +310,13 @@ func (c *Connection) handleLeave(payload map[string]interface{}) {
 		return
 	}
 
+	// Remove WebRTC peer connection if active
+	if c.webrtcManager != nil && c.participantID != "" {
+		if err := c.webrtcManager.RemovePeerConnection(c.participantID); err != nil {
+			c.logger.Warnw("Failed to remove peer connection on leave", "error", err)
+		}
+	}
+
 	// Remove participant from room
 	if err := c.roomManager.RemoveParticipant(c.roomID, c.participantID); err != nil {
 		c.logger.Warnw("Failed to remove participant", "error", err)
@@ -340,16 +350,22 @@ func (c *Connection) handleOffer(payload map[string]interface{}) {
 		return
 	}
 
-	// In a full implementation, you would:
-	// 1. Get WebRTC manager from server context
-	// 2. Create peer connection
-	// 3. Process offer and create answer
-	// For now, send placeholder response
+	if c.webrtcManager == nil {
+		c.sendError("WebRTC manager not configured", nil)
+		return
+	}
+
+	answerSDP, err := c.webrtcManager.HandleOffer(c.participantID, sdp)
+	if err != nil {
+		c.logger.Errorw("Failed to process WebRTC offer", "error", err, "participant_id", c.participantID)
+		c.sendError("Failed to process WebRTC offer", err)
+		return
+	}
 
 	response := protocol.WebSocketMessage{
 		Type: "answer",
 		Payload: map[string]interface{}{
-			"sdp":            sdp, // Placeholder - should be actual answer SDP
+			"sdp":            answerSDP,
 			"participant_id": c.participantID,
 		},
 	}
@@ -366,8 +382,21 @@ func (c *Connection) handleAnswer(payload map[string]interface{}) {
 		"sdp_length", len(sdp),
 	)
 
-	// Process answer through WebRTC manager
-	// Implementation depends on server context having WebRTC manager
+	if c.participantID == "" {
+		c.sendError("Not joined to a room", nil)
+		return
+	}
+
+	if c.webrtcManager == nil {
+		c.sendError("WebRTC manager not configured", nil)
+		return
+	}
+
+	if err := c.webrtcManager.HandleAnswer(c.participantID, sdp); err != nil {
+		c.logger.Errorw("Failed to process WebRTC answer", "error", err, "participant_id", c.participantID)
+		c.sendError("Failed to process WebRTC answer", err)
+		return
+	}
 
 	response := protocol.WebSocketMessage{
 		Type: "answer_processed",
@@ -384,7 +413,7 @@ func (c *Connection) handleAnswer(payload map[string]interface{}) {
 func (c *Connection) handleICECandidate(payload map[string]interface{}) {
 	c.logger.Debugw("Handling ICE candidate", "participant_id", c.participantID)
 
-	if c.participantID == "" {
+	if c.participantID == "" || c.webrtcManager == nil {
 		return
 	}
 
@@ -396,8 +425,9 @@ func (c *Connection) handleICECandidate(payload map[string]interface{}) {
 	}
 
 	// Parse candidate
+	candidateStr, _ := candidateData["candidate"].(string)
 	candidate := pionwebrtc.ICECandidateInit{
-		Candidate: candidateData["candidate"].(string),
+		Candidate: candidateStr,
 	}
 
 	if sdpMLineIndex, ok := candidateData["sdpMLineIndex"].(float64); ok {
@@ -409,10 +439,12 @@ func (c *Connection) handleICECandidate(payload map[string]interface{}) {
 		candidate.SDPMid = &sdpMid
 	}
 
-	// Add candidate through WebRTC manager
-	// Implementation depends on server context
+	if err := c.webrtcManager.AddICECandidate(c.participantID, candidate); err != nil {
+		c.logger.Warnw("Failed to add ICE candidate", "error", err, "participant_id", c.participantID)
+		return
+	}
 
-	c.logger.Debugw("ICE candidate processed",
+	c.logger.Debugw("ICE candidate processed successfully",
 		"participant_id", c.participantID,
 	)
 }

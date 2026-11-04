@@ -14,9 +14,11 @@ import (
 	"github.com/cyper98/zenc-server/internal/api/websocket"
 	"github.com/cyper98/zenc-server/internal/room"
 	"github.com/cyper98/zenc-server/internal/store"
+	"github.com/cyper98/zenc-server/internal/webrtc"
 	"github.com/cyper98/zenc-server/pkg/config"
 	"github.com/cyper98/zenc-server/pkg/logger"
 	"github.com/gin-gonic/gin"
+	pionwebrtc "github.com/pion/webrtc/v3"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -54,6 +56,26 @@ func main() {
 	// Initialize Room Manager
 	roomManager := room.NewManager(redisStore, lgr)
 
+	// Initialize WebRTC Manager
+	var iceServers []pionwebrtc.ICEServer
+	for _, s := range cfg.WebRTC.ICEServers {
+		iceServers = append(iceServers, pionwebrtc.ICEServer{
+			URLs:           s.URLs,
+			Username:       s.Username,
+			Credential:     s.Credential,
+			CredentialType: pionwebrtc.ICECredentialTypePassword,
+		})
+	}
+	webrtcManager, err := webrtc.NewManager(webrtc.Config{
+		ICEServers: iceServers,
+		PortMin:    cfg.WebRTC.PortRange.Min,
+		PortMax:    cfg.WebRTC.PortRange.Max,
+	}, lgr)
+	if err != nil {
+		lgr.Fatal("Failed to initialize WebRTC manager", "error", err)
+	}
+	defer webrtcManager.Close()
+
 	// Configure WebSocket origin checking
 	originChecker := websocket.MakeOriginChecker(cfg.WebSocket.AllowedOrigins)
 	websocket.SetOriginChecker(originChecker)
@@ -90,7 +112,7 @@ func main() {
 
 	// WebSocket endpoint
 	router.GET("/ws", func(c *gin.Context) {
-		websocket.HandleConnection(c.Writer, c.Request, roomManager, lgr)
+		websocket.HandleConnection(c.Writer, c.Request, roomManager, webrtcManager, lgr)
 	})
 
 	// Start metrics server if enabled

@@ -372,26 +372,29 @@ Contributions are welcome! Please follow these steps:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 Roadmap
+## 🧩 Architecture & Core Capabilities
 
-### Phase 1: MVP (Current)
-- [x] Basic room management
-- [x] REST API
-- [x] WebSocket signaling
-- [x] Redis integration
-- [ ] Full WebRTC implementation with Pion
+Zenc Server delivers an enterprise-grade WebRTC SFU (Selective Forwarding Unit) with distributed clustering and media routing:
 
-### Phase 2: Scalability
-- [ ] Multi-server support
-- [ ] Cross-server communication
-- [ ] Load balancing
-- [ ] Automatic failover
+### WebRTC SFU & Real-Time Media Pipeline
+- **Pion WebRTC Core**: High-throughput media pipeline forwarding RTP/RTCP packets with ultra-low latency.
+- **Automated SDP & ICE Negotiation**: Full Offer/Answer lifecycle and trickle ICE candidate exchange over persistent WebSocket connections.
+- **Media Track Management**: Dynamically routes microphone, camera, and screen share tracks per participant with granular limit enforcement.
 
-### Phase 3: Advanced Features
-- [ ] Stream composition engine
-- [ ] Quality adaptation
-- [ ] Recording support
-- [ ] RTMP ingestion/egress
+### Room & Session Orchestration
+- **Participant Lifecycle**: Real-time room creation, user join/leave workflows, and role-based access (Publisher, Subscriber, Admin).
+- **Session Auto-Hold & Reconnection**: Preserves participant state (`in-transit`, `on-hold`) upon network dropouts, allowing seamless reconnects without tearing down room state.
+
+### Distributed State & Clustering
+- **Redis Multi-Node Sync**: Cluster-ready state store supporting Single, Sentinel, and Cluster modes for cross-server synchronization.
+- **Zone-Based Partitioning**: Geographic and logical stream zone grouping for distributed deployments.
+
+### Full Ecosystem Integration
+- **zenc-ingress**: Seamless handoff for incoming RTMP, SRT, and WHIP streams into active rooms.
+- **zenc-transcoder**: Real-time ABR ladders and video transcoding for multi-device delivery.
+- **zenc-recorder**: Live session recording and archive persistence.
+- **zenc-egress**: Broadcast room feeds to external platforms (YouTube, Twitch, custom CDN endpoints).
+- **zenc-license**: Enterprise node validation and license enforcement.
 
 ## 🐛 Troubleshooting
 
